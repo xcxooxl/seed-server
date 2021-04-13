@@ -10,7 +10,6 @@ async function loadAllModels() {
 			// models[path.basename(modelName).replace(".js","")] = require(path.join(modelsPath,modelName))(sequelize,DataTypes);
 			require(path.join(modelsPath, modelName))(sequelize, DataTypes);
 		});
-	await sequelize.sync();
 }
 
 const sequelize = new Sequelize("sqlite::memory:", {
@@ -19,11 +18,32 @@ const sequelize = new Sequelize("sqlite::memory:", {
 		updatedAt: "updated_at",
 	},
 }); // Example for postgres
-(async () => {
+function defineRelationships() {
+	const example_user = sequelize.model("example_user");
+	const exampleModel = sequelize.model("example");
+	const userModel = sequelize.model("user");
+	exampleModel.belongsToMany(userModel, { through: example_user });
+	userModel.belongsToMany(exampleModel, { through: example_user });
+}
+
+async function initDB() {
 	await loadAllModels();
-	const example = sequelize.model("example");
-	for (let i = 0; i < 25; i++) {
-		example.create({ name: `example_${i}` });
+	defineRelationships();
+	await sequelize.sync();
+}
+
+(async () => {
+	await initDB();
+
+	const example_user = sequelize.model("example_user");
+	const exampleModel = sequelize.model("example");
+	const userModel = sequelize.model("user");
+
+	for (let i = 1; i <= 25; i++) {
+		const example = await exampleModel.create({ name: `example_${i}` });
+		const user = await userModel.create({ name: `user_${i}`, exampleId: example });
+		await example_user.create({ userId: user.id, exampleId: example.id });
 	}
+	let users = await userModel.findAll({ include: [exampleModel] });
 })();
 module.exports = { sequelize };
